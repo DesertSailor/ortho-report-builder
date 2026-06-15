@@ -105,6 +105,10 @@ with cc2:
     p_duration = st.text_input("Duration of Injury (e.g., 3 hrs, 2 days)", key=f"dur_{idx}")
     is_operated = st.radio("Was this case operated during the shift?", ["No", "Yes"], key=f"op_{idx}")
 
+# Interactive Additional Entry Block
+st.subheader("💡 Optional Case Specifics")
+p_notes = st.text_area("Additional Remarks / Notes", placeholder="Enter specific diagnostics, laboratory tracking values, neurovascular state, or custom plan parameters...", key=f"notes_{idx}")
+
 # Processing Multiple Picture Upload Blocks
 cropped_pre_list = []
 cropped_post_list = []
@@ -140,6 +144,7 @@ if st.button("➕ Save This Case"):
             "name": p_name, "mrn": p_mrn, "age": p_age, "sex": p_sex, "moi": p_moi, "duration": p_duration,
             "doi": p_doi_str,
             "operated": is_operated,
+            "notes": p_notes.strip(),
             "pre_imgs": cropped_pre_list.copy(),
             "post_imgs": cropped_post_list.copy() if is_operated == "Yes" else []
         }
@@ -208,24 +213,39 @@ if st.session_state.cases:
             if not img_chunks:
                 img_chunks = [[]]
                 
-            for chunk in img_chunks:
+            for chunk_idx, chunk in enumerate(img_chunks):
                 slide_case = prs.slides.add_slide(blank_layout)
                 
-                # TITLE BOX: Sequenced case number combined with patient identifiers
+                # TITLE BOX: Condenses cleanly on continuation slides (does not duplicate name data)
                 title_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
                 tf_title = title_box.text_frame
                 p_t = tf_title.paragraphs[0]
-                p_t.text = f"{case_idx}. {c['name']}  |  {c['age']}/{c['sex']}  |  MRN: {c['mrn']}"
+                
+                if chunk_idx == 0:
+                    p_t.text = f"{case_idx}. {c['name']}  |  {c['age']}/{c['sex']}  |  MRN: {c['mrn']}"
+                else:
+                    p_t.text = f"{case_idx}. (Cont.)"
+                
                 p_t.font.size = Pt(32)
                 p_t.font.bold = True
                 
-                # DESCRIPTION BOX
-                desc_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(1.3), Inches(12.333), Inches(0.6))
+                # DESCRIPTION & CUSTOM REMARKS BOX
+                desc_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.9))
                 tf_desc = desc_box.text_frame
+                tf_desc.word_wrap = True
+                
                 p_d = tf_desc.paragraphs[0]
                 p_d.text = f"MOI: {c['moi']}   |   DOI: {c['doi']}   |   Duration: {c['duration']}"
                 p_d.font.size = Pt(18)
                 p_d.font.color.rgb = RGBColor(60, 60, 60)
+                
+                # Dynamically append text notes under the core metrics block if provided
+                if c['notes']:
+                    p_n = tf_desc.add_paragraph()
+                    p_n.text = f"Notes: {c['notes']}"
+                    p_n.font.size = Pt(15)
+                    p_n.font.italic = True
+                    p_n.font.color.rgb = RGBColor(90, 90, 90)
                 
                 # Rendering logic based on chunk allocations
                 if chunk:
