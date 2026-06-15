@@ -5,6 +5,7 @@ from pptx.dml.color import RGBColor
 from streamlit_cropper import st_cropper
 from PIL import Image
 import io
+from datetime import date
 
 # --- Formatting Helpers ---
 def clean_dr_name(name):
@@ -26,7 +27,15 @@ if 'case_counter' not in st.session_state:
 st.set_page_config(page_title="Ortho Morning Report Builder", layout="wide")
 st.title("🏥 Orthopedic Morning Report Builder")
 
-# --- 1. Duty Team Setup ---
+# --- 1. Global Presentation Settings ---
+st.header("📅 Presentation Settings")
+# Calendar selector for the main report date
+presentation_date = st.date_input("Date of Presentation (Calendar)", date.today())
+presentation_date_str = presentation_date.strftime("%B %d, %Y")
+
+st.markdown("---")
+
+# --- 2. Duty Team Setup ---
 st.header("👥 Today's Duty Team")
 with st.expander("Review Consultants & Residents on Duty", expanded=True):
     c1, c2 = st.columns(2)
@@ -34,8 +43,10 @@ with st.expander("Review Consultants & Residents on Duty", expanded=True):
         st.subheader("Consultants")
         cons_1 = st.text_input("Consultant 1", placeholder="Name")
         cons_2 = st.text_input("Consultant 2", placeholder="Name")
-        cons_3 = st.text_input("Consultant 3", value="Dr. Solomon")
-        cons_4 = st.text_input("Consultant 4", value="Dr. Dawit")
+        cons_3 = st.text_input("Consultant 3", placeholder="Name")
+        cons_4 = st.text_input("Consultant 4", placeholder="Name")
+        cons_5 = st.text_input("Consultant 5", value="Dr. Solomon")
+        cons_6 = st.text_input("Consultant 6", value="Dr. Dawit")
     with c2:
         st.subheader("Residents")
         res1 = st.text_input("Resident 1", placeholder="Name")
@@ -47,7 +58,7 @@ with st.expander("Review Consultants & Residents on Duty", expanded=True):
 
 st.markdown("---")
 
-# --- 2. Case Entry Section ---
+# --- 3. Case Entry Section ---
 st.header("📝 Add Patient Case")
 idx = st.session_state.case_counter
 
@@ -63,6 +74,10 @@ with cc1:
         
     p_age = st.text_input("Age", key=f"age_{idx}")
     p_sex = st.selectbox("Sex", ["M", "F"], key=f"sex_{idx}")
+    
+    # Individual Patient Date of Injury Calendar Selector
+    p_doi = st.date_input("Date of Injury", date.today(), key=f"doi_{idx}")
+    p_doi_str = p_doi.strftime("%b %d, %Y")
 
 with cc2:
     # MOI Configuration Matrix
@@ -114,6 +129,7 @@ if st.button("➕ Save This Case"):
     if p_name or p_mrn:
         new_case = {
             "name": p_name, "mrn": p_mrn, "age": p_age, "sex": p_sex, "moi": p_moi, "duration": p_duration,
+            "doi": p_doi_str,
             "operated": is_operated,
             "pre_imgs": cropped_pre_list.copy(),
             "post_imgs": cropped_post_list.copy() if is_operated == "Yes" else []
@@ -126,12 +142,12 @@ if st.button("➕ Save This Case"):
 
 st.markdown("---")
 
-# --- 3. Queue Display & File Processing Engine ---
+# --- 4. Queue Display & File Processing Engine ---
 if st.session_state.cases:
     st.header(f"📋 Presentation Queue ({len(st.session_state.cases)} Cases Added)")
     for i, c in enumerate(st.session_state.cases):
         tag = "🔴 Operated" if c['operated'] == "Yes" else "🟢 Conservative"
-        st.write(f"**Case {i+1}:** {c['name']} ({c['age']}/{c['sex']}) — MRN: {c['mrn']} | {tag}")
+        st.write(f"**Case {i+1}:** {c['name']} ({c['age']}/{c['sex']}) — MRN: {c['mrn']} | DOI: {c['doi']} | {tag}")
         
     if st.button("🗑️ Reset Entire Queue"):
         st.session_state.cases = []
@@ -152,12 +168,12 @@ if st.session_state.cases:
         tf.word_wrap = True
         
         p_title = tf.paragraphs[0]
-        p_title.text = "Orthopedic Department Duty Report"
-        p_title.font.size = Pt(38)
+        p_title.text = f"Orthopedic Department Duty Report\nDate: {presentation_date_str}"
+        p_title.font.size = Pt(36)
         p_title.font.bold = True
         
-        # Format names dynamically
-        seniors = [clean_dr_name(s) for s in [cons_1, cons_2, cons_3, cons_4] if s.strip()]
+        # Format names dynamically with Dr. prefix verification
+        seniors = [clean_dr_name(s) for s in [cons_1, cons_2, cons_3, cons_4, cons_5, cons_6] if s.strip()]
         residents = [clean_dr_name(r) for r in [res1, res2, res3, res4, res5, res6] if r.strip()]
         
         p_team = tf.add_paragraph()
@@ -170,19 +186,19 @@ if st.session_state.cases:
             # Slide A: Pre-Op Presentation
             slide_pre = prs.slides.add_slide(blank_layout)
             
-            # Formulate Title Text Box Area exclusively
-            title_box = slide_pre.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(1.0))
+            # TITLE BOX: Exclusively Patient Name, Age/Sex, and MRN
+            title_box = slide_pre.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
             tf_title = title_box.text_frame
             p_t = tf_title.paragraphs[0]
-            p_t.text = f"{c['name']} | {c['age']}/{c['sex']} | MRN: {c['mrn']}"
-            p_t.font.size = Pt(26)
+            p_t.text = f"{c['name']}  |  {c['age']}/{c['sex']}  |  MRN: {c['mrn']}"
+            p_t.font.size = Pt(28)
             p_t.font.bold = True
             
-            # Formulate Diagnostic Sub-Data Block Down Below Title
+            # DESCRIPTION BOX: Shifted down below title for diagnostic values
             desc_box = slide_pre.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.6))
             tf_desc = desc_box.text_frame
             p_d = tf_desc.paragraphs[0]
-            p_d.text = f"MOI: {c['moi']}    |    Presentation Delay: {c['duration']}    |    Status: Pre-Op/Injury"
+            p_d.text = f"MOI: {c['moi']}    |    Date of Injury: {c['doi']}    |    Presentation Delay: {c['duration']}    |    Status: Pre-Op"
             p_d.font.size = Pt(15)
             p_d.font.color.rgb = RGBColor(220, 50, 50)
             
@@ -203,23 +219,26 @@ if st.session_state.cases:
             if c['operated'] == "Yes" and c['post_imgs']:
                 slide_post = prs.slides.add_slide(blank_layout)
                 
-                title_box2 = slide_post.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(1.0))
+                # TITLE BOX (Post-Op Check)
+                title_box2 = slide_post.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
                 tf_title2 = title_box2.text_frame
                 p_t2 = tf_title2.paragraphs[0]
-                p_t2.text = f"{c['name']} | {c['age']}/{c['sex']} | MRN: {c['mrn']}"
-                p_t2.font.size = Pt(26)
+                p_t2.text = f"{c['name']}  |  {c['age']}/{c['sex']}  |  MRN: {c['mrn']}"
+                p_t2.font.size = Pt(28)
                 p_t2.font.bold = True
                 
+                # DESCRIPTION BOX (Post-Op Check)
                 desc_box2 = slide_post.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.6))
                 tf_desc2 = desc_box2.text_frame
                 p_d2 = tf_desc2.paragraphs[0]
-                p_d2.text = f"MOI: {c['moi']}    |    Status: Post-Operative Fixation Checks"
+                p_d2.text = f"MOI: {c['moi']}    |    Date of Injury: {c['doi']}    |    Status: Post-Operative Fixation Checks"
                 p_d2.font.size = Pt(15)
                 p_d2.font.color.rgb = RGBColor(50, 180, 50)
                 
                 # Mount Multiple Post-Op Images Side-by-Side
                 n_post = len(c['post_imgs'])
                 img_w2 = min(5.8, 12.333 / max(1, n_post))
+                gap = 0.2
                 left_start2 = 0.5 + (12.333 - (n_post * img_w2 + (n_post - 1) * gap)) / 2
                 
                 for i, img_obj in enumerate(c['post_imgs']):
@@ -236,6 +255,6 @@ if st.session_state.cases:
         st.download_button(
             label="💾 Save PowerPoint File to Device",
             data=final_ppt_buf,
-            file_name="Morning_Report_Presentation.pptx",
+            file_name=f"Morning_Report_{presentation_date.strftime('%Y_%m_%d')}.pptx",
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
         )
