@@ -4,3 +4,4 @@ streamlit-cropper
 Pillow
 python-docx
 pandas
+pickle
