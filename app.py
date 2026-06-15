@@ -5,7 +5,17 @@ from pptx.dml.color import RGBColor
 from streamlit_cropper import st_cropper
 from PIL import Image
 import io
+import os
+import pickle
 from datetime import date
+
+# --- Local Storage Configuration ---
+BACKUP_FILE = "morning_report_backup.pkl"
+
+def save_local_backup():
+    """Saves the current session queue to local file system"""
+    with open(BACKUP_FILE, 'wb') as f:
+        pickle.dump(st.session_state.cases, f)
 
 # --- Formatting Helpers ---
 def clean_dr_name(name):
@@ -18,14 +28,27 @@ def clean_dr_name(name):
         return f"Dr. {core.title()}"
     return f"Dr. {name.title()}"
 
-# --- Session State Initialization ---
+# --- Session State & Auto-Recovery Initialization ---
 if 'cases' not in st.session_state:
-    st.session_state.cases = []
+    # Attempt to recover a previous session automatically on startup
+    if os.path.exists(BACKUP_FILE):
+        try:
+            with open(BACKUP_FILE, 'rb') as f:
+                st.session_state.cases = pickle.load(f)
+        except Exception:
+            st.session_state.cases = []
+    else:
+        st.session_state.cases = []
+
 if 'case_counter' not in st.session_state:
-    st.session_state.case_counter = 0
+    st.session_state.case_counter = len(st.session_state.cases)
 
 st.set_page_config(page_title="Ortho Morning Report Builder", layout="wide")
 st.title("🏥 Orthopedic Morning Report Builder")
+
+# Visual feedback tracker for active database sessions
+if st.session_state.cases:
+    st.success(f"💾 Local persistent backup active: {len(st.session_state.cases)} cases safely cached on disk.")
 
 # --- 1. Global Presentation Settings ---
 st.header("📅 Presentation Settings")
@@ -135,7 +158,7 @@ with img_col2:
                 c_img = st_cropper(raw_img, realtime_update=False, box_color='#00FF00', aspect_ratio=None, key=f"crop_post_{idx}_{f_idx}")
                 cropped_post_list.append(c_img)
 
-# Commit Entries to Session Cache
+# Commit Entries to Session Cache & File Backup
 if st.button("➕ Save This Case"):
     if not mrn_is_valid:
         st.error("Please provide a valid numeric MRN before saving.")
@@ -150,6 +173,10 @@ if st.button("➕ Save This Case"):
         }
         st.session_state.cases.append(new_case)
         st.session_state.case_counter += 1
+        
+        # Flash write directly to local file backup
+        save_local_backup()
+        st.invalidate_pages() if hasattr(st, "invalidate_pages") else None
         st.rerun()
     else:
         st.error("Please provide at least a Patient Identifier or MRN before saving.")
@@ -166,6 +193,8 @@ if st.session_state.cases:
     if st.button("🗑️ Reset Entire Queue"):
         st.session_state.cases = []
         st.session_state.case_counter = 0
+        if os.path.exists(BACKUP_FILE):
+            os.remove(BACKUP_FILE)
         st.rerun()
 
     st.subheader("🚀 Export Slide Deck")
@@ -216,9 +245,9 @@ if st.session_state.cases:
             for chunk_idx, chunk in enumerate(img_chunks):
                 slide_case = prs.slides.add_slide(blank_layout)
                 
-                # Render metadata exclusively on the primary slide of the case
+                # Render text descriptors strictly on the first slide for the case
                 if chunk_idx == 0:
-                    # TITLE BOX: Base demographic details line
+                    # TITLE BOX: Demographic layout line
                     title_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
                     tf_title = title_box.text_frame
                     p_t = tf_title.paragraphs[0]
@@ -236,7 +265,7 @@ if st.session_state.cases:
                     p_d.font.size = Pt(18)
                     p_d.font.color.rgb = RGBColor(60, 60, 60)
                     
-                    # Clean output string generation with "Notes:" header label removed completely
+                    # Custom user instructions string printed cleanly without label prefixes
                     if c['notes']:
                         p_n = tf_desc.add_paragraph()
                         p_n.text = f"{c['notes']}"
@@ -246,7 +275,7 @@ if st.session_state.cases:
                         
                     img_top = Inches(2.3)
                 else:
-                    # Subsequent overflow slides contain ONLY the images (no title, labels, or captions)
+                    # Clear multi-slide option layout: Images ONLY for sequential slides
                     img_top = Inches(1.0)
                 
                 # Rendering logic based on chunk allocations
@@ -269,4 +298,13 @@ if st.session_state.cases:
                         slide_case.shapes.add_picture(img_buf2, Inches(6.933), img_top, width=Inches(5.8))
 
         # Output Final Presentation Binary
-        final_ppt_buf = io.Bytes
+        final_ppt_buf = io.BytesIO()
+        prs.save(final_ppt_buf)
+        final_ppt_buf.seek(0)
+        
+        st.download_button(
+            label="💾 Save PowerPoint File to Device",
+            data=final_ppt_buf,
+            file_name=f"Morning_Report_{presentation_date.strftime('%Y_%m_%d')}.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
