@@ -216,36 +216,38 @@ if st.session_state.cases:
             for chunk_idx, chunk in enumerate(img_chunks):
                 slide_case = prs.slides.add_slide(blank_layout)
                 
-                # TITLE BOX: Condenses cleanly on continuation slides (does not duplicate name data)
-                title_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
-                tf_title = title_box.text_frame
-                p_t = tf_title.paragraphs[0]
-                
+                # Render metadata exclusively on the primary slide of the case
                 if chunk_idx == 0:
+                    # TITLE BOX: Base demographic details line
+                    title_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
+                    tf_title = title_box.text_frame
+                    p_t = tf_title.paragraphs[0]
                     p_t.text = f"{case_idx}. {c['name']}  |  {c['age']}/{c['sex']}  |  MRN: {c['mrn']}"
+                    p_t.font.size = Pt(32)
+                    p_t.font.bold = True
+                    
+                    # DESCRIPTION & REMARKS BOX
+                    desc_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.9))
+                    tf_desc = desc_box.text_frame
+                    tf_desc.word_wrap = True
+                    
+                    p_d = tf_desc.paragraphs[0]
+                    p_d.text = f"MOI: {c['moi']}   |   DOI: {c['doi']}   |   Duration: {c['duration']}"
+                    p_d.font.size = Pt(18)
+                    p_d.font.color.rgb = RGBColor(60, 60, 60)
+                    
+                    # Clean output string generation with "Notes:" header label removed completely
+                    if c['notes']:
+                        p_n = tf_desc.add_paragraph()
+                        p_n.text = f"{c['notes']}"
+                        p_n.font.size = Pt(15)
+                        p_n.font.italic = True
+                        p_n.font.color.rgb = RGBColor(90, 90, 90)
+                        
+                    img_top = Inches(2.3)
                 else:
-                    p_t.text = f"{case_idx}. (Cont.)"
-                
-                p_t.font.size = Pt(32)
-                p_t.font.bold = True
-                
-                # DESCRIPTION & CUSTOM REMARKS BOX
-                desc_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.9))
-                tf_desc = desc_box.text_frame
-                tf_desc.word_wrap = True
-                
-                p_d = tf_desc.paragraphs[0]
-                p_d.text = f"MOI: {c['moi']}   |   DOI: {c['doi']}   |   Duration: {c['duration']}"
-                p_d.font.size = Pt(18)
-                p_d.font.color.rgb = RGBColor(60, 60, 60)
-                
-                # Dynamically append text notes under the core metrics block if provided
-                if c['notes']:
-                    p_n = tf_desc.add_paragraph()
-                    p_n.text = f"Notes: {c['notes']}"
-                    p_n.font.size = Pt(15)
-                    p_n.font.italic = True
-                    p_n.font.color.rgb = RGBColor(90, 90, 90)
+                    # Subsequent overflow slides contain ONLY the images (no title, labels, or captions)
+                    img_top = Inches(1.0)
                 
                 # Rendering logic based on chunk allocations
                 if chunk:
@@ -254,26 +256,17 @@ if st.session_state.cases:
                         img_buf = io.BytesIO()
                         img_obj.save(img_buf, format="PNG")
                         img_buf.seek(0)
-                        slide_case.shapes.add_picture(img_buf, Inches(3.766), Inches(2.3), width=Inches(5.8))
+                        slide_case.shapes.add_picture(img_buf, Inches(3.766), img_top, width=Inches(5.8))
                     elif len(chunk) == 2:
                         img_buf1 = io.BytesIO()
                         chunk[0].save(img_buf1, format="PNG")
                         img_buf1.seek(0)
-                        slide_case.shapes.add_picture(img_buf1, Inches(0.6), Inches(2.3), width=Inches(5.8))
+                        slide_case.shapes.add_picture(img_buf1, Inches(0.6), img_top, width=Inches(5.8))
                         
                         img_buf2 = io.BytesIO()
                         chunk[1].save(img_buf2, format="PNG")
                         img_buf2.seek(0)
-                        slide_case.shapes.add_picture(img_buf2, Inches(6.933), Inches(2.3), width=Inches(5.8))
+                        slide_case.shapes.add_picture(img_buf2, Inches(6.933), img_top, width=Inches(5.8))
 
         # Output Final Presentation Binary
-        final_ppt_buf = io.BytesIO()
-        prs.save(final_ppt_buf)
-        final_ppt_buf.seek(0)
-        
-        st.download_button(
-            label="💾 Save PowerPoint File to Device",
-            data=final_ppt_buf,
-            file_name=f"Morning_Report_{presentation_date.strftime('%Y_%m_%d')}.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        )
+        final_ppt_buf = io.Bytes
