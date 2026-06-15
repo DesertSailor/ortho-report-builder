@@ -1,0 +1,6 @@
+streamlit
+python-pptx
+streamlit-cropper
+Pillow
+python-docx
+pandas
