@@ -11,12 +11,12 @@ from datetime import date
 def clean_dr_name(name):
     """Ensures name is properly capitalized and prefixed with Dr."""
     name = name.strip()
-    if not name:
+    if not name or name.lower() == "none":
         return ""
     if name.lower().startswith("dr"):
         core = name[2:].strip().lstrip(".").strip()
-        return f"Dr. {core}"
-    return f"Dr. {name}"
+        return f"Dr. {core.title()}"
+    return f"Dr. {name.title()}"
 
 # --- Session State Initialization ---
 if 'cases' not in st.session_state:
@@ -29,7 +29,6 @@ st.title("🏥 Orthopedic Morning Report Builder")
 
 # --- 1. Global Presentation Settings ---
 st.header("📅 Presentation Settings")
-# Calendar selector for the main report date
 presentation_date = st.date_input("Date of Presentation (Calendar)", date.today())
 presentation_date_str = presentation_date.strftime("%B %d, %Y")
 
@@ -41,12 +40,19 @@ with st.expander("Review Consultants & Residents on Duty", expanded=True):
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("Consultants")
-        cons_1 = st.text_input("Consultant 1", placeholder="Name")
-        cons_2 = st.text_input("Consultant 2", placeholder="Name")
-        cons_3 = st.text_input("Consultant 3", placeholder="Name")
-        cons_4 = st.text_input("Consultant 4", placeholder="Name")
-        cons_5 = st.text_input("Consultant 5", value="Dr. Solomon")
-        cons_6 = st.text_input("Consultant 6", value="Dr. Dawit")
+        
+        # Exact departmental dropdown configurations
+        eopd_ward_options = ["None", "addisu", "tilahun", "samuel", "mathias", "tesfatsion", "kalkidan", "ashnefi"]
+        sport_options = ["None", "mahder", "mamo"]
+        trauma_options = ["None", "abiy", "milkias", "beza", "ibrahim"]
+        
+        cons_1 = st.selectbox("Consultant Spot 1 (EOPD/Ward)", eopd_ward_options, index=0)
+        cons_2 = st.selectbox("Consultant Spot 2 (EOPD/Ward)", eopd_ward_options, index=0)
+        cons_3 = st.selectbox("Consultant Spot 3 (Sport)", sport_options, index=0)
+        cons_4 = st.selectbox("Consultant Spot 4 (Trauma)", trauma_options, index=0)
+        
+        st.text_input("Consultant Spot 5 (Permanent)", value="Dr. Solomon", disabled=True)
+        st.text_input("Consultant Spot 6 (Permanent)", value="Dr. Dawit", disabled=True)
     with c2:
         st.subheader("Residents")
         res1 = st.text_input("Resident 1", placeholder="Name")
@@ -74,12 +80,12 @@ with cc1:
         
     p_age = st.text_input("Age", key=f"age_{idx}")
     p_sex = st.selectbox("Sex", ["M", "F"], key=f"sex_{idx}")
-    
+
+with cc2:
     # Individual Patient Date of Injury Calendar Selector
     p_doi = st.date_input("Date of Injury", date.today(), key=f"doi_{idx}")
     p_doi_str = p_doi.strftime("%b %d, %Y")
 
-with cc2:
     # MOI Configuration Matrix
     moi_options = ["RTA", "Fall from Height", "FDA", "Sports Injury", "Direct Blow", "Others"]
     selected_moi = st.selectbox("Mechanism of Injury (MOI)", moi_options, key=f"moi_sel_{idx}")
@@ -88,13 +94,8 @@ with cc2:
     else:
         p_moi = selected_moi
 
-    # Duration Configuration Matrix
-    dur_options = ["< 6 hours", "6-12 hours", "12-24 hours", "24-48 hours", "> 2 days", "Others"]
-    selected_dur = st.selectbox("Duration / Presentation Delay", dur_options, key=f"dur_sel_{idx}")
-    if selected_dur == "Others":
-        p_duration = st.text_input("Specify Custom Duration", key=f"dur_txt_{idx}")
-    else:
-        p_duration = selected_dur
+    # Simplified Duration text input field to completely bypass clunky drop-downs on mobile
+    p_duration = st.text_input("Duration of Injury / Presentation Delay (e.g., 3 hrs, 2 days)", key=f"dur_{idx}")
 
     is_operated = st.radio("Was this case operated during the shift?", ["No", "Yes"], key=f"op_{idx}")
 
@@ -105,23 +106,24 @@ cropped_post_list = []
 st.subheader("📸 Radiograph Batch Processing")
 img_col1, img_col2 = st.columns(2)
 
+# Mobile-optimized cropping loops (realtime_update=False drastically enhances touch accuracy)
 with img_col1:
-    pre_files = st.file_uploader("Upload Injury / Pre-Op Images (Multiple Allowed)", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"pre_files_{idx}")
+    pre_files = st.file_uploader("Upload Injury / Pre-Op Images", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"pre_files_{idx}")
     if pre_files:
         for f_idx, f in enumerate(pre_files):
-            st.write(f"🔍 **Crop Pre-Op Image [{f_idx + 1}]:**")
+            st.write(f"🔍 **Pre-Op Image [{f_idx + 1}]:**")
             raw_img = Image.open(f)
-            c_img = st_cropper(raw_img, realtime_update=True, box_color='#FF0000', aspect_ratio=None, key=f"crop_pre_{idx}_{f_idx}")
+            c_img = st_cropper(raw_img, realtime_update=False, box_color='#FF0000', aspect_ratio=None, key=f"crop_pre_{idx}_{f_idx}")
             cropped_pre_list.append(c_img)
 
 with img_col2:
     if is_operated == "Yes":
-        post_files = st.file_uploader("Upload Post-Op / Fixation Images (Multiple Allowed)", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"post_files_{idx}")
+        post_files = st.file_uploader("Upload Post-Op / Fixation Images", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"post_files_{idx}")
         if post_files:
             for f_idx, f in enumerate(post_files):
-                st.write(f"🔍 **Crop Post-Op Image [{f_idx + 1}]:**")
+                st.write(f"🔍 **Post-Op Image [{f_idx + 1}]:**")
                 raw_img = Image.open(f)
-                c_img = st_cropper(raw_img, realtime_update=True, box_color='#00FF00', aspect_ratio=None, key=f"crop_post_{idx}_{f_idx}")
+                c_img = st_cropper(raw_img, realtime_update=False, box_color='#00FF00', aspect_ratio=None, key=f"crop_post_{idx}_{f_idx}")
                 cropped_post_list.append(c_img)
 
 # Commit Entries to Session Cache
@@ -147,7 +149,7 @@ if st.session_state.cases:
     st.header(f"📋 Presentation Queue ({len(st.session_state.cases)} Cases Added)")
     for i, c in enumerate(st.session_state.cases):
         tag = "🔴 Operated" if c['operated'] == "Yes" else "🟢 Conservative"
-        st.write(f"**Case {i+1}:** {c['name']} ({c['age']}/{c['sex']}) — MRN: {c['mrn']} | DOI: {c['doi']} | {tag}")
+        st.write(f"**Case {i+1}:** {c['name']} ({c['age']}/{c['sex']}) — MRN: {c['mrn']} | {tag}")
         
     if st.button("🗑️ Reset Entire Queue"):
         st.session_state.cases = []
@@ -172,8 +174,9 @@ if st.session_state.cases:
         p_title.font.size = Pt(36)
         p_title.font.bold = True
         
-        # Format names dynamically with Dr. prefix verification
-        seniors = [clean_dr_name(s) for s in [cons_1, cons_2, cons_3, cons_4, cons_5, cons_6] if s.strip()]
+        # Auto-compile and format names cleanly with capitalization verification
+        raw_seniors = [cons_1, cons_2, cons_3, cons_4, "Dr. Solomon", "Dr. Dawit"]
+        seniors = [clean_dr_name(s) for s in raw_seniors if s and s.lower() != "none"]
         residents = [clean_dr_name(r) for r in [res1, res2, res3, res4, res5, res6] if r.strip()]
         
         p_team = tf.add_paragraph()
@@ -183,69 +186,65 @@ if st.session_state.cases:
 
         # --- Case Document Generation ---
         for c in st.session_state.cases:
-            # Slide A: Pre-Op Presentation
-            slide_pre = prs.slides.add_slide(blank_layout)
+            slide_case = prs.slides.add_slide(blank_layout)
             
-            # TITLE BOX: Exclusively Patient Name, Age/Sex, and MRN
-            title_box = slide_pre.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
+            # TITLE BOX: Patient Name, Age/Sex, and MRN exclusively
+            title_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
             tf_title = title_box.text_frame
             p_t = tf_title.paragraphs[0]
             p_t.text = f"{c['name']}  |  {c['age']}/{c['sex']}  |  MRN: {c['mrn']}"
             p_t.font.size = Pt(28)
             p_t.font.bold = True
             
-            # DESCRIPTION BOX: Shifted down below title for diagnostic values
-            desc_box = slide_pre.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.6))
+            # DESCRIPTION BOX: Plain text formatting shifted safely below title lines
+            desc_box = slide_case.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.6))
             tf_desc = desc_box.text_frame
             p_d = tf_desc.paragraphs[0]
-            p_d.text = f"MOI: {c['moi']}    |    Date of Injury: {c['doi']}    |    Presentation Delay: {c['duration']}    |    Status: Pre-Op"
-            p_d.font.size = Pt(15)
-            p_d.font.color.rgb = RGBColor(220, 50, 50)
             
-            # Mount Multiple Pre-Op Images Side-by-Side
-            if c['pre_imgs']:
-                n_pre = len(c['pre_imgs'])
-                img_w = min(5.8, 12.333 / max(1, n_pre))
-                gap = 0.2
-                left_start = 0.5 + (12.333 - (n_pre * img_w + (n_pre - 1) * gap)) / 2
+            op_prefix = "Operated Fixation Check" if c['operated'] == "Yes" else "Conservative Management"
+            p_d.text = f"MOI: {c['moi']}   |   DOI: {c['doi']}   |   Delay: {c['duration']}   |   Plan: {op_prefix}"
+            p_d.font.size = Pt(15)
+            # Default presentation text color style (No red/green fills)
+            p_d.font.color.rgb = RGBColor(60, 60, 60)
+            
+            # SIDE-BY-SIDE ALLOCATION INTERFACE (Pre-Op Left / Post-Op Right)
+            if c['operated'] == "Yes":
+                # Compute layout partitions for side-by-side matrices
+                half_width = Inches(5.9)
                 
-                for i, img_obj in enumerate(c['pre_imgs']):
-                    img_buf = io.BytesIO()
-                    img_obj.save(img_buf, format="PNG")
-                    img_buf.seek(0)
-                    slide_pre.shapes.add_picture(img_buf, Inches(max(0.5, left_start + i * (img_w + gap))), Inches(2.0), width=Inches(img_w))
-
-            # Slide B: Post-Op Presentation (If Active)
-            if c['operated'] == "Yes" and c['post_imgs']:
-                slide_post = prs.slides.add_slide(blank_layout)
+                # Render Pre-Op collection on the left
+                if c['pre_imgs']:
+                    n_pre = len(c['pre_imgs'])
+                    img_w = min(5.9, half_width / max(1, n_pre))
+                    for i, img_obj in enumerate(c['pre_imgs']):
+                        img_buf = io.BytesIO()
+                        img_obj.save(img_buf, format="PNG")
+                        img_buf.seek(0)
+                        slide_case.shapes.add_picture(img_buf, Inches(0.5 + i * img_w), Inches(2.2), width=Inches(img_w - 0.1))
                 
-                # TITLE BOX (Post-Op Check)
-                title_box2 = slide_post.shapes.add_textbox(Inches(0.5), Inches(0.4), Inches(12.333), Inches(0.8))
-                tf_title2 = title_box2.text_frame
-                p_t2 = tf_title2.paragraphs[0]
-                p_t2.text = f"{c['name']}  |  {c['age']}/{c['sex']}  |  MRN: {c['mrn']}"
-                p_t2.font.size = Pt(28)
-                p_t2.font.bold = True
-                
-                # DESCRIPTION BOX (Post-Op Check)
-                desc_box2 = slide_post.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(12.333), Inches(0.6))
-                tf_desc2 = desc_box2.text_frame
-                p_d2 = tf_desc2.paragraphs[0]
-                p_d2.text = f"MOI: {c['moi']}    |    Date of Injury: {c['doi']}    |    Status: Post-Operative Fixation Checks"
-                p_d2.font.size = Pt(15)
-                p_d2.font.color.rgb = RGBColor(50, 180, 50)
-                
-                # Mount Multiple Post-Op Images Side-by-Side
-                n_post = len(c['post_imgs'])
-                img_w2 = min(5.8, 12.333 / max(1, n_post))
-                gap = 0.2
-                left_start2 = 0.5 + (12.333 - (n_post * img_w2 + (n_post - 1) * gap)) / 2
-                
-                for i, img_obj in enumerate(c['post_imgs']):
-                    img_buf = io.BytesIO()
-                    img_obj.save(img_buf, format="PNG")
-                    img_buf.seek(0)
-                    slide_post.shapes.add_picture(img_buf, Inches(max(0.5, left_start2 + i * (img_w2 + gap))), Inches(2.0), width=Inches(img_w2))
+                # Render Post-Op collection on the right
+                if c['post_imgs']:
+                    n_post = len(c['post_imgs'])
+                    img_w2 = min(5.9, half_width / max(1, n_post))
+                    for i, img_obj in enumerate(c['post_imgs']):
+                        img_buf = io.BytesIO()
+                        img_obj.save(img_buf, format="PNG")
+                        img_buf.seek(0)
+                        slide_case.shapes.add_picture(img_buf, Inches(6.8 + i * img_w2), Inches(2.2), width=Inches(img_w2 - 0.1))
+                        
+            else:
+                # Conservative layout: Center or expand Pre-Op across the slide space
+                if c['pre_imgs']:
+                    n_pre = len(c['pre_imgs'])
+                    img_w = min(5.8, 12.333 / max(1, n_pre))
+                    gap = 0.2
+                    left_start = 0.5 + (12.333 - (n_pre * img_w + (n_pre - 1) * gap)) / 2
+                    
+                    for i, img_obj in enumerate(c['pre_imgs']):
+                        img_buf = io.BytesIO()
+                        img_obj.save(img_buf, format="PNG")
+                        img_buf.seek(0)
+                        slide_case.shapes.add_picture(img_buf, Inches(max(0.5, left_start + i * (img_w + gap))), Inches(2.2), width=Inches(img_w))
 
         # Output Final File
         final_ppt_buf = io.BytesIO()
