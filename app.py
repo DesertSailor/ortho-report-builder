@@ -576,4 +576,4 @@ if st.button("📥 Generate Morning Report PPT"):
             label="💾 Download Morning Report PPT",
             data=ppt_buffer,
             file_name=filename,
-            mime="application/vnd.openxml)
+            mime="application/vnd.openxml")
