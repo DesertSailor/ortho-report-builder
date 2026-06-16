@@ -322,7 +322,7 @@ if st.session_state.cases:
             file_name=f"Morning_Report_{presentation_date.strftime('%Y_%m_%d')}.pptx",
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
         )
-                st.session_state.cases = pickle.load(f)
+            st.session_state.cases = pickle.load(f)
         except Exception:
             st.session_state.cases = []
     else:
